@@ -1,26 +1,34 @@
-// backend/index.ts
-
 import dotenv from 'dotenv';
 import express from 'express';
-import { Pool } from 'pg';
 import Redis from 'ioredis';
 import amqp from 'amqplib';
+import { PrismaClient } from '@prisma/client';
+import authRoutes from './routes/auth.js';
+import eventsRoutes from './routes/events.js';
+import { authenticateToken, requireRole } from './middleware/auth.js';
+import cors from 'cors';
 
 dotenv.config();
 
 const app = express();
+
+// 1. CORS middleware FIRST
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true
+}));
+
+// 2. Then JSON parser and other middleware
 app.use(express.json());
 
-/** -------------------- PostgreSQL Setup -------------------- */
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+/** -------------------- Prisma Setup -------------------- */
+const prisma = new PrismaClient();
 
 /** -------------------- Redis Setup -------------------- */
-const redis = new Redis({
-  host: process.env.REDIS_HOST,
-  port: Number(process.env.REDIS_PORT),
-});
+// const redis = new Redis({
+//   host: process.env.REDIS_HOST,
+//   port: Number(process.env.REDIS_PORT),
+// });
 
 /** -------------------- RabbitMQ Setup -------------------- */
 let channel;
@@ -37,33 +45,51 @@ async function connectRabbitMQ() {
   }
 }
 
-connectRabbitMQ();
+// connectRabbitMQ();
 
-/** -------------------- Health Check Route -------------------- */
+/** -------------------- Routes -------------------- */
+app.use('/api/auth', authRoutes);
+app.use('/api/events', eventsRoutes);
 
-app.get('/api/test-db', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT NOW()');
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('DB Error:', error);
-        res.status(500).json({ error: error.message });
-    }
+// Protected route example
+app.get('/api/protected', authenticateToken, (req, res) => {
+  res.json({ 
+    message: 'This is a protected route', 
+    user: req.user 
+  });
 });
 
+// Admin only route example
+app.get('/api/admin', authenticateToken, requireRole(['ADMIN']), (req, res) => {
+  res.json({ 
+    message: 'Admin access granted', 
+    user: req.user 
+  });
+});
 
+/** -------------------- Health Check Routes -------------------- */
+
+// PostgreSQL via Prisma
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const now = await prisma.$queryRaw`SELECT NOW()`;
+    res.json({ timestamp: now[0].now });
+  } catch (error) {
+    console.error('DB Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Redis + Prisma
 app.get('/api/health', async (req, res) => {
   try {
-    // Check Postgres
-    const dbRes = await pool.query('SELECT NOW()');
-
-    // Check Redis
-    const redisRes = await redis.ping();
+    const dbNow = await prisma.$queryRaw`SELECT NOW()`;
+    // const redisRes = await redis.ping();
 
     res.json({
       status: 'OK',
-      postgres: dbRes.rows[0],
-      redis: redisRes,
+      postgres: dbNow[0].now,
+      // redis: redisRes,
     });
   } catch (err) {
     console.error('❌ Health check failed:', err.message);

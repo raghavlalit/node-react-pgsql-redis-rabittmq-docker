@@ -2,17 +2,27 @@
   "name": "event-backend",
   "version": "1.0.0",
   "main": "src/app.js",
+  "type": "module",
   "scripts": {
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "seed": "node prisma/seed.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "express": "^4.19.0",
-    "pg": "^8.11.3",
-    "ioredis": "^5.3.2",
+    "@prisma/client": "^6.12.0",
     "amqplib": "^0.10.4",
-    "dotenv": "^16.4.5"
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "prisma": "^6.12.0"
   }
 }

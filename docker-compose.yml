@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:16-alpine
-    restart: always
     environment:
       POSTGRES_USER: eventuser
       POSTGRES_PASSWORD: eventpass
@@ -15,10 +14,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - eventnet
 
   redis:
     image: redis:7-alpine
-    restart: always
     ports:
       - "6379:6379"
     healthcheck:
@@ -26,10 +26,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - eventnet
 
   rabbitmq:
     image: rabbitmq:3-management
-    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: eventuser
+      RABBITMQ_DEFAULT_PASS: eventpass
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -38,18 +42,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - eventnet
 
   backend:
     build: ./backend
-    restart: always
-    environment:
-      DATABASE_URL: postgres://eventuser:eventpass@postgres:5432/eventdb
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
-      PORT: 5000
+    env_file:
+      - ./backend/.env
     ports:
       - "5000:5000"
+    command: npm run dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,25 +59,22 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - /app/node_modules # prevents node_modules conflicts
+    networks:
+      - eventnet
 
   frontend:
     build: ./frontend
-    restart: always
+    env_file:
+      - ./frontend/.env
     ports:
-      - "5173:5173" # Vite
-      # - "3000:3000" # Uncomment if using CRA
+      - "5173:5173"
     depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # prevents node_modules conflicts
+    networks:
+      - eventnet
 
   pgadmin:
     image: dpage/pgadmin4
-    restart: always
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: admin
@@ -83,5 +82,11 @@ services:
       - "5050:80"
     depends_on:
       - postgres
+    networks:
+      - eventnet
+
 volumes:
   pgdata:
+
+networks:
+  eventnet:
